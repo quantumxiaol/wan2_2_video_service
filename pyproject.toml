@@ -1,0 +1,64 @@
+[project]
+name = "wan2-2-video-service"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+
+requires-python = ">=3.12,<3.14"
+
+dependencies = [
+    "torch>=2.4.0",
+    "torchvision>=0.19.0",
+    "opencv-python>=4.9.0.80",
+    "diffusers>=0.31.0",
+    "transformers>=4.49.0",
+    "tokenizers>=0.20.3",
+    "accelerate>=1.1.1",
+    "tqdm",
+    "imageio",
+    "easydict",
+    "ftfy",
+    "dashscope",
+    "imageio-ffmpeg",
+    "numpy>=1.23.5,<2",
+    "decord; platform_system == 'Linux'",
+    "peft",
+    "onnxruntime",
+    "pandas",
+    "matplotlib",
+    "loguru",
+    "sentencepiece",
+    "fastapi>=0.135.3",
+    "uvicorn>=0.44.0",
+    "modelscope>=1.35.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+    "isort",
+    "mypy",
+    "huggingface-hub[cli]"
+]
+linux-gpu = [
+    "flash-attn;platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "sam2;platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
+
+[tool.setuptools]
+packages = ["wan"]
+
+[tool.setuptools.package-data]
+"wan" = ["**/*.py"]
+
+[tool.uv]
+no-build-isolation-package = ["flash-attn","sam-2"]
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'"
+]
+
+[tool.uv.sources]
+sam-2 = { git = "https://github.com/quantumxiaol/sam2.git", branch = "main" }
