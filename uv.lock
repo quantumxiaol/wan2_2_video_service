@@ -1592,9 +1592,9 @@ wheels = [
 ]
 
 [[package]]
-name = "sam2"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
+name = "sam-2"
+version = "1.0"
+source = { git = "https://github.com/quantumxiaol/sam2.git?branch=main#ebd0b60921aad49016daf5d62d152eca47e37922" }
 dependencies = [
     { name = "hydra-core", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "iopath", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -1604,7 +1604,6 @@ dependencies = [
     { name = "torchvision", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "tqdm", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ce/11/d07fc96688f731a85de6d5260e98b709051eded2b7b5667ae292530bcf90/sam2-1.1.0.tar.gz", hash = "sha256:7e0ea252d43c10d853e3acfce0b5770ac683c30481bd6de311300e9d44f45b74", size = 152836, upload-time = "2024-12-21T09:55:17.154Z" }
 
 [[package]]
 name = "sentencepiece"
@@ -1899,7 +1898,7 @@ dev = [
 ]
 linux-gpu = [
     { name = "flash-attn", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "sam2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "sam-2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 
 [package.metadata]
@@ -1929,7 +1928,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "peft" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "sam2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
+    { name = "sam-2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'", git = "https://github.com/quantumxiaol/sam2.git?branch=main" },
     { name = "sentencepiece" },
     { name = "tokenizers", specifier = ">=0.20.3" },
     { name = "torch", specifier = ">=2.4.0,<2.11.0" },
