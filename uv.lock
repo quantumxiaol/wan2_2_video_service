@@ -1908,6 +1908,12 @@ dev = [
 ]
 linux-gpu = [
     { name = "flash-attn", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-cublas-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-cuda-cupti-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-cuda-nvrtc-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-cuda-runtime-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-cudnn-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "nvidia-nvjitlink-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "sam-2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 
@@ -1933,6 +1939,12 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "ninja", specifier = ">=1.13.0" },
     { name = "numpy", specifier = ">=1.23.5,<2" },
+    { name = "nvidia-cublas-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
+    { name = "nvidia-cuda-cupti-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
+    { name = "nvidia-cuda-nvrtc-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
+    { name = "nvidia-cuda-runtime-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
+    { name = "nvidia-cudnn-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'", specifier = ">=9.0" },
+    { name = "nvidia-nvjitlink-cu12", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'" },
     { name = "onnxruntime" },
     { name = "opencv-python", specifier = ">=4.9.0.80" },
     { name = "pandas" },
@@ -1942,7 +1954,7 @@ requires-dist = [
     { name = "sam-2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'linux-gpu'", git = "https://github.com/quantumxiaol/sam2.git?branch=main" },
     { name = "sentencepiece" },
     { name = "tokenizers", specifier = ">=0.20.3" },
-    { name = "torch", specifier = ">=2.4.0,<2.11.0" },
+    { name = "torch", specifier = ">=2.8.0,<2.11.0" },
     { name = "torchvision", specifier = ">=0.19.0" },
     { name = "tqdm" },
     { name = "transformers", specifier = ">=4.49.0" },
