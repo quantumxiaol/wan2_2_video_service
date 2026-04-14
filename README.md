@@ -34,9 +34,19 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 uv sync
-uv sync --extra dev linux-gpu
+uv sync --extra dev --extra linux-gpu
 ```
+可能需要这些命令
+```
+# 指定 C 和 C++ 编译器为 12 版本
+export CC=/usr/bin/gcc-12
+export CXX=/usr/bin/g++-12
 
+# 告诉 nvcc 忽略版本检查（双重保险）
+export NVCC_APPEND_FLAGS="-allow-unsupported-compiler"
+# 设置最大编译线程数，避免过高的内存占用
+export MAX_JOBS=4
+```
 
 ## 2. 配置 .env
 
