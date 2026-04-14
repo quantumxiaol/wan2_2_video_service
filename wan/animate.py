@@ -6,6 +6,7 @@ import cv2
 import types
 from copy import deepcopy
 from functools import partial
+from typing import Callable
 from einops import rearrange
 import numpy as np
 import torch
@@ -308,6 +309,8 @@ class WanAnimate:
         n_prompt="",
         seed=-1,
         offload_model=True,
+        progress_callback: Callable[[dict], None] | None = None,
+        progress_interval: int = 1,
     ):
         r"""
         Generates video frames from input image using diffusion process.
@@ -339,6 +342,10 @@ class WanAnimate:
                 Random seed for noise generation. If -1, use random seed
             offload_model (`bool`, *optional*, defaults to True):
                 If True, offloads models to CPU during generation to save VRAM
+            progress_callback (callable, *optional*):
+                Callback that receives progress dictionaries.
+            progress_interval (`int`, *optional*, defaults to 1):
+                Call callback every N denoising steps.
 
         Returns:
             torch.Tensor:
@@ -349,6 +356,30 @@ class WanAnimate:
                 - W: Frame width 
         """
         assert refert_num == 1 or refert_num == 5, "refert_num should be 1 or 5."
+        progress_interval = max(1, int(progress_interval))
+
+        def _emit_progress(
+            stage: str,
+            percent: float | None = None,
+            segment_index: int = 0,
+            total_segments: int = 0,
+            step_index: int = 0,
+            total_steps: int = 0,
+        ) -> None:
+            if progress_callback is None:
+                return
+            payload = {
+                "stage": stage,
+                "percent": percent,
+                "segment_index": segment_index,
+                "total_segments": total_segments,
+                "step_index": step_index,
+                "total_steps": total_steps,
+            }
+            try:
+                progress_callback(payload)
+            except Exception as exc:
+                logging.warning("progress_callback failed: %s", exc)
 
         seed_g = torch.Generator(device=self.device)
         seed_g.manual_seed(seed)
@@ -364,6 +395,7 @@ class WanAnimate:
         src_ref_path = os.path.join(src_root_path, "src_ref.png")
 
         cond_images, face_images, refer_images = self.prepare_source(src_pose_path=src_pose_path, src_face_path=src_face_path, src_ref_path=src_ref_path)
+        _emit_progress(stage="encoding_text", percent=1.0)
         
         if not self.t5_cpu:
             self.text_encoder.model.to(self.device)
@@ -382,6 +414,16 @@ class WanAnimate:
         logging.info('real frames: {} target frames: {}'.format(real_frame_len, target_len))
         cond_images = self.inputs_padding(cond_images, target_len)
         face_images = self.inputs_padding(face_images, target_len)
+        step_stride = max(1, clip_len - refert_num)
+        total_segments = max(1, math.ceil(max(0, target_len - refert_num) / step_stride))
+        _emit_progress(
+            stage="preparing_inputs",
+            percent=3.0,
+            segment_index=0,
+            total_segments=total_segments,
+            step_index=0,
+            total_steps=max(1, total_segments * sampling_steps),
+        )
         
         if replace_flag:
             src_bg_path = os.path.join(src_root_path, "src_bg.mp4")
@@ -394,6 +436,7 @@ class WanAnimate:
         start = 0
         end = clip_len
         all_out_frames = []
+        segment_idx = 0
         while True:
             if start + refert_num >= len(cond_images):
                 break
@@ -502,6 +545,17 @@ class WanAnimate:
                         sigmas=sampling_sigmas)
                 else:
                     raise NotImplementedError("Unsupported solver.")
+
+                segment_total_steps = len(timesteps)
+                global_total_steps = max(1, total_segments * segment_total_steps)
+                _emit_progress(
+                    stage="sampling",
+                    percent=max(3.0, min(99.0, (segment_idx * segment_total_steps) / global_total_steps * 100.0)),
+                    segment_index=segment_idx + 1,
+                    total_segments=total_segments,
+                    step_index=0,
+                    total_steps=global_total_steps,
+                )
 
                 latents = noise
 
@@ -632,9 +686,32 @@ class WanAnimate:
                     latents[0] = temp_x0.squeeze(0)
 
                     x0 = latents
+                    current_step = i + 1
+                    if (
+                        current_step % progress_interval == 0
+                        or current_step == segment_total_steps
+                    ):
+                        global_step = segment_idx * segment_total_steps + current_step
+                        percent = max(3.0, min(99.0, global_step / global_total_steps * 100.0))
+                        _emit_progress(
+                            stage="sampling",
+                            percent=percent,
+                            segment_index=segment_idx + 1,
+                            total_segments=total_segments,
+                            step_index=global_step,
+                            total_steps=global_total_steps,
+                        )
 
                 x0 = [x.to(dtype=torch.float32) for x in x0]
                 out_frames = torch.stack(self.vae.decode([x0[0][:, 1:]]))
+                _emit_progress(
+                    stage="decoding",
+                    percent=max(3.0, min(99.0, (segment_idx + 1) / total_segments * 99.0)),
+                    segment_index=segment_idx + 1,
+                    total_segments=total_segments,
+                    step_index=(segment_idx + 1) * segment_total_steps,
+                    total_steps=global_total_steps,
+                )
                 
                 if start != 0:
                     out_frames = out_frames[:, :, refert_num:]
@@ -643,6 +720,15 @@ class WanAnimate:
 
                 start += clip_len - refert_num
                 end += clip_len - refert_num
+                segment_idx += 1
 
         videos = torch.cat(all_out_frames, dim=2)[:, :, :real_frame_len]
+        _emit_progress(
+            stage="done",
+            percent=100.0,
+            segment_index=total_segments,
+            total_segments=total_segments,
+            step_index=max(1, total_segments * sampling_steps),
+            total_steps=max(1, total_segments * sampling_steps),
+        )
         return videos[0] if self.rank == 0 else None

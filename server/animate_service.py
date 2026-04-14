@@ -151,9 +151,24 @@ class ServiceSettings:
 class AnimateRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     image_base64: str = Field(min_length=1)
-    sample_steps: int = Field(default=20, ge=4, le=80)
-    clip_len: int = Field(default=77, ge=5, le=121)
-    fps: int = Field(default=30, ge=1, le=60)
+    sample_steps: int = Field(
+        default=8,
+        ge=4,
+        le=80,
+        description="Denoising steps. Higher means better quality but slower generation.",
+    )
+    clip_len: int = Field(
+        default=33,
+        ge=5,
+        le=121,
+        description="Generated frames per segment. Must satisfy 4n+1. Higher means longer video and higher memory/time.",
+    )
+    fps: int = Field(
+        default=16,
+        ge=1,
+        le=60,
+        description="Output playback fps. Lower values reduce output file size and source preprocessing load.",
+    )
     seed: int | None = None
     offload_model: bool = True
 
@@ -161,7 +176,7 @@ class AnimateRequest(BaseModel):
     @classmethod
     def validate_clip_len(cls, value: int) -> int:
         if (value - 1) % 4 != 0:
-            raise ValueError("clip_len must satisfy 4n+1, for example: 77")
+            raise ValueError("clip_len must satisfy 4n+1, for example: 33 or 77")
         return value
 
 
@@ -182,6 +197,13 @@ class JobRecord:
     finished_at: str | None = None
     output_video_path: Path | None = None
     error: str | None = None
+    progress_stage: str = "queued"
+    progress_percent: float = 0.0
+    progress_current_step: int = 0
+    progress_total_steps: int = 0
+    progress_current_segment: int = 0
+    progress_total_segments: int = 0
+    last_progress_at: str | None = None
 
 
 class WanAnimateRunner:
@@ -309,6 +331,35 @@ class AnimateJobService:
             finally:
                 self.queue.task_done()
 
+    def _set_job_progress(
+        self,
+        job_id: str,
+        *,
+        stage: str | None = None,
+        percent: float | None = None,
+        current_step: int | None = None,
+        total_steps: int | None = None,
+        current_segment: int | None = None,
+        total_segments: int | None = None,
+    ) -> None:
+        with self.jobs_lock:
+            job = self.jobs.get(job_id)
+            if job is None:
+                return
+            if stage is not None:
+                job.progress_stage = stage
+            if percent is not None:
+                job.progress_percent = max(0.0, min(100.0, float(percent)))
+            if current_step is not None:
+                job.progress_current_step = max(0, int(current_step))
+            if total_steps is not None:
+                job.progress_total_steps = max(0, int(total_steps))
+            if current_segment is not None:
+                job.progress_current_segment = max(0, int(current_segment))
+            if total_segments is not None:
+                job.progress_total_segments = max(0, int(total_segments))
+            job.last_progress_at = utc_now_iso()
+
     def _run_job(self, job_id: str) -> None:
         with self.jobs_lock:
             job = self.jobs.get(job_id)
@@ -316,9 +367,25 @@ class AnimateJobService:
                 return
             job.status = "running"
             job.started_at = utc_now_iso()
+            job.progress_stage = "loading_model"
+            job.progress_percent = 0.5
+            job.last_progress_at = utc_now_iso()
 
         try:
             model = self.runner.get_model()
+            self._set_job_progress(job_id, stage="model_ready", percent=1.0)
+
+            def on_progress(progress: dict[str, Any]) -> None:
+                self._set_job_progress(
+                    job_id,
+                    stage=str(progress.get("stage") or "running"),
+                    percent=float(progress["percent"]) if progress.get("percent") is not None else None,
+                    current_step=progress.get("step_index"),
+                    total_steps=progress.get("total_steps"),
+                    current_segment=progress.get("segment_index"),
+                    total_segments=progress.get("total_segments"),
+                )
+
             output_video_path = self.settings.outputs_root / f"wan_animate_{job.job_id}.mp4"
             video_tensor = model.generate(
                 src_root_path=str(job.source_dir),
@@ -333,20 +400,28 @@ class AnimateJobService:
                 n_prompt="",
                 seed=job.seed,
                 offload_model=job.offload_model,
+                progress_callback=on_progress,
+                progress_interval=1,
             )
             if video_tensor is None:
                 raise RuntimeError("Model returned empty output tensor.")
+            self._set_job_progress(job_id, stage="saving_output", percent=99.5)
             save_tensor_video(video_tensor, output_path=output_video_path, fps=job.fps)
             with self.jobs_lock:
                 job.status = "succeeded"
                 job.output_video_path = output_video_path
                 job.finished_at = utc_now_iso()
+                job.progress_stage = "done"
+                job.progress_percent = 100.0
+                job.last_progress_at = utc_now_iso()
         except Exception as exc:
             logging.exception("Job %s failed", job_id)
             with self.jobs_lock:
                 job.status = "failed"
                 job.error = str(exc)
                 job.finished_at = utc_now_iso()
+                job.progress_stage = "failed"
+                job.last_progress_at = utc_now_iso()
         finally:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -368,6 +443,13 @@ def format_job_response(job: JobRecord, request: Request) -> dict[str, Any]:
         "source_dir": str(job.source_dir),
         "input_image_path": str(job.input_image_path),
         "error": job.error,
+        "progress_stage": job.progress_stage,
+        "progress_percent": round(job.progress_percent, 2),
+        "progress_current_step": job.progress_current_step,
+        "progress_total_steps": job.progress_total_steps,
+        "progress_current_segment": job.progress_current_segment,
+        "progress_total_segments": job.progress_total_segments,
+        "last_progress_at": job.last_progress_at,
     }
     if job.output_video_path:
         payload["output_video_path"] = str(job.output_video_path)

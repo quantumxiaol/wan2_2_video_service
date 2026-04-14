@@ -29,9 +29,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Server base URL. Defaults to env SERVER_URL.",
     )
-    parser.add_argument("--sample-steps", type=int, default=20, help="Sampling steps.")
-    parser.add_argument("--clip-len", type=int, default=77, help="Frame count (must be 4n+1).")
-    parser.add_argument("--fps", type=int, default=30, help="Output FPS.")
+    parser.add_argument(
+        "--sample-steps",
+        type=int,
+        default=8,
+        help="Denoising steps. Higher improves quality but increases inference time.",
+    )
+    parser.add_argument(
+        "--clip-len",
+        type=int,
+        default=33,
+        help="Generated frame count per segment (must be 4n+1). Higher means longer output and more GPU memory/time.",
+    )
+    parser.add_argument(
+        "--fps",
+        type=int,
+        default=16,
+        help="Output video FPS (playback speed).",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed.")
     parser.add_argument("--poll-interval", type=float, default=5.0, help="Polling interval in seconds.")
     parser.add_argument("--timeout", type=int, default=7200, help="Max wait seconds for job completion.")
@@ -98,7 +113,24 @@ def main() -> None:
                 )
             data = status_resp.json()
             status = data.get("status")
-            print(f"[{int(elapsed)}s] status={status}")
+            stage = data.get("progress_stage")
+            percent = data.get("progress_percent")
+            current_step = data.get("progress_current_step")
+            total_steps = data.get("progress_total_steps")
+            current_segment = data.get("progress_current_segment")
+            total_segments = data.get("progress_total_segments")
+
+            progress_text = ""
+            if percent is not None:
+                progress_text = f", progress={percent}%"
+            if current_step and total_steps:
+                progress_text += f", step={current_step}/{total_steps}"
+            if current_segment and total_segments:
+                progress_text += f", segment={current_segment}/{total_segments}"
+            if stage:
+                progress_text += f", stage={stage}"
+
+            print(f"[{int(elapsed)}s] status={status}{progress_text}")
 
             if status == "succeeded":
                 print("Output video path:", data.get("output_video_path"))
@@ -115,4 +147,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         sys.exit(130)
-

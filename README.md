@@ -117,7 +117,10 @@ curl http://127.0.0.1:1111/healthz
 ```bash
 uv run python client/submit_animate.py \
   --image /path/to/input.png \
-  --prompt "A person waves to the camera"
+  --prompt "A person waves to the camera" \
+  --sample-steps 8 \
+  --clip-len 33 \
+  --fps 16
 ```
 
 客户端会：
@@ -138,13 +141,21 @@ uv run python client/submit_animate.py \
 {
   "prompt": "A person waves to the camera",
   "image_base64": "<base64-image>",
-  "sample_steps": 20,
-  "clip_len": 77,
-  "fps": 30,
+  "sample_steps": 8,
+  "clip_len": 33,
+  "fps": 16,
   "seed": 12345,
   "offload_model": true
 }
 ```
+
+参数说明（推荐先用轻量参数）：
+
+- `sample_steps`：去噪步数，越大质量通常更高，但耗时更长。
+- `clip_len`：生成帧数（必须满足 `4n+1`），越大视频更长，同时显存和耗时更高。
+- `fps`：输出视频帧率（播放速度参数）。
+- `seed`：随机种子，固定后可复现相近结果。
+- `offload_model`：是否在推理过程中把部分模块卸载到 CPU，减少显存压力但可能更慢。
 
 响应 JSON（示例）：
 
@@ -175,6 +186,13 @@ uv run python client/submit_animate.py \
 失败时返回：
 
 - `error`：错误信息。
+
+运行中会返回进度字段：
+
+- `progress_stage`：当前阶段（如 `loading_model`、`sampling`、`saving_output`）。
+- `progress_percent`：总体百分比（0~100）。
+- `progress_current_step` / `progress_total_steps`：采样步进度。
+- `progress_current_segment` / `progress_total_segments`：分段进度。
 
 ## 7. 输入输出文件落盘规则
 
