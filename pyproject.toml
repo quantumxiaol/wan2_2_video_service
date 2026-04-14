@@ -21,7 +21,7 @@ dependencies = [
     "dashscope",
     "imageio-ffmpeg",
     "numpy>=1.23.5,<2",
-    "decord; platform_system == 'Linux'",
+    "eva-decord; platform_system == 'Linux'",
     "peft",
     "onnxruntime",
     "pandas",
