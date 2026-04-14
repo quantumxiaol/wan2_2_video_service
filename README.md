@@ -60,6 +60,7 @@ CUDA_DEVICE_ID=0
 RESULTS_ROOT=./results
 OUTPUTS_ROOT=./outputs
 ANIMATE_SAMPLE_SOLVER=dpm++
+ANIMATE_DEFAULT_RESOLUTION=480p
 HF_MIRROR=https://hf-mirror.com
 ```
 
@@ -118,6 +119,7 @@ curl http://127.0.0.1:1111/healthz
 uv run python client/submit_animate.py \
   --image /path/to/input.png \
   --prompt "A person waves to the camera" \
+  --resolution 480p \
   --sample-steps 8 \
   --clip-len 33 \
   --fps 16
@@ -141,6 +143,7 @@ uv run python client/submit_animate.py \
 {
   "prompt": "A person waves to the camera",
   "image_base64": "<base64-image>",
+  "resolution": "480p",
   "sample_steps": 8,
   "clip_len": 33,
   "fps": 16,
@@ -154,6 +157,7 @@ uv run python client/submit_animate.py \
 - `sample_steps`：去噪步数，越大质量通常更高，但耗时更长。
 - `clip_len`：生成帧数（必须满足 `4n+1`），越大视频更长，同时显存和耗时更高。
 - `fps`：输出视频帧率（播放速度参数）。
+- `resolution`：分辨率档位（`480p` 或 `720p`，默认 `480p`）。
 - `seed`：随机种子，固定后可复现相近结果。
 - `offload_model`：是否在推理过程中把部分模块卸载到 CPU，减少显存压力但可能更慢。
 
@@ -182,6 +186,7 @@ uv run python client/submit_animate.py \
 
 - `output_video_path`：服务端本地文件路径。
 - `output_video_url`：可通过 HTTP 访问的视频地址（`/outputs/...`）。
+- `target_size`：实际推理输入分辨率（例如 `480*832`）。
 
 失败时返回：
 

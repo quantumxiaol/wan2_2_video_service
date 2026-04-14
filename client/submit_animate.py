@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=16,
         help="Output video FPS (playback speed).",
     )
+    parser.add_argument(
+        "--resolution",
+        choices=("480p", "720p"),
+        default="480p",
+        help="Target generation resolution preset.",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed.")
     parser.add_argument("--poll-interval", type=float, default=5.0, help="Polling interval in seconds.")
     parser.add_argument("--timeout", type=int, default=7200, help="Max wait seconds for job completion.")
@@ -86,6 +92,7 @@ def main() -> None:
         "sample_steps": args.sample_steps,
         "clip_len": args.clip_len,
         "fps": args.fps,
+        "resolution": args.resolution,
         "seed": args.seed,
         "offload_model": args.offload_model,
     }

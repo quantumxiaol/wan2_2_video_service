@@ -47,10 +47,16 @@ def resolve_path(raw_path: str) -> Path:
     return path
 
 
-def choose_target_size(width: int, height: int) -> tuple[int, int]:
-    if width >= height:
-        return 720, 1280
-    return 1280, 720
+def choose_target_size(width: int, height: int, resolution: str) -> tuple[int, int]:
+    if resolution == "720p":
+        if width >= height:
+            return 720, 1280
+        return 1280, 720
+    if resolution == "480p":
+        if width >= height:
+            return 480, 832
+        return 832, 480
+    raise ValueError(f"Unsupported resolution: {resolution}")
 
 
 def decode_base64_image(image_base64: str) -> Image.Image:
@@ -126,6 +132,7 @@ class ServiceSettings:
     animate_ckpt_dir: Path
     cuda_device_id: int
     sample_solver: str
+    default_resolution: str
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -138,6 +145,9 @@ class ServiceSettings:
         sample_solver = os.getenv("ANIMATE_SAMPLE_SOLVER", "dpm++").strip().lower()
         if sample_solver not in {"dpm++", "unipc"}:
             raise ValueError("ANIMATE_SAMPLE_SOLVER must be `dpm++` or `unipc`.")
+        default_resolution = os.getenv("ANIMATE_DEFAULT_RESOLUTION", "480p").strip().lower()
+        if default_resolution not in {"480p", "720p"}:
+            raise ValueError("ANIMATE_DEFAULT_RESOLUTION must be `480p` or `720p`.")
         return cls(
             results_root=results_root,
             outputs_root=outputs_root,
@@ -145,6 +155,7 @@ class ServiceSettings:
             animate_ckpt_dir=animate_ckpt_dir,
             cuda_device_id=int(os.getenv("CUDA_DEVICE_ID", "0")),
             sample_solver=sample_solver,
+            default_resolution=default_resolution,
         )
 
 
@@ -169,6 +180,10 @@ class AnimateRequest(BaseModel):
         le=60,
         description="Output playback fps. Lower values reduce output file size and source preprocessing load.",
     )
+    resolution: str | None = Field(
+        default=None,
+        description="Target resolution preset: 480p or 720p. None means service default.",
+    )
     seed: int | None = None
     offload_model: bool = True
 
@@ -179,6 +194,16 @@ class AnimateRequest(BaseModel):
             raise ValueError("clip_len must satisfy 4n+1, for example: 33 or 77")
         return value
 
+    @field_validator("resolution")
+    @classmethod
+    def validate_resolution(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in {"480p", "720p"}:
+            raise ValueError("resolution must be one of: 480p, 720p")
+        return normalized
+
 
 @dataclass
 class JobRecord:
@@ -188,10 +213,13 @@ class JobRecord:
     sample_steps: int
     clip_len: int
     fps: int
+    resolution: str
     seed: int
     offload_model: bool
     source_dir: Path
     input_image_path: Path
+    target_height: int
+    target_width: int
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
@@ -276,7 +304,8 @@ class AnimateJobService:
         input_image_path = source_dir / f"input_{job_id}.png"
         image.save(input_image_path)
 
-        target_h, target_w = choose_target_size(*image.size)
+        resolution = payload.resolution or self.settings.default_resolution
+        target_h, target_w = choose_target_size(*image.size, resolution=resolution)
         ref_frame = letterbox(image, target_h=target_h, target_w=target_w)
         face_frame = letterbox(image, target_h=512, target_w=512)
 
@@ -302,10 +331,13 @@ class AnimateJobService:
             sample_steps=payload.sample_steps,
             clip_len=payload.clip_len,
             fps=payload.fps,
+            resolution=resolution,
             seed=seed,
             offload_model=payload.offload_model,
             source_dir=source_dir,
             input_image_path=input_image_path,
+            target_height=target_h,
+            target_width=target_w,
             created_at=utc_now_iso(),
         )
 
@@ -435,6 +467,8 @@ def format_job_response(job: JobRecord, request: Request) -> dict[str, Any]:
         "sample_steps": job.sample_steps,
         "clip_len": job.clip_len,
         "fps": job.fps,
+        "resolution": job.resolution,
+        "target_size": f"{job.target_height}*{job.target_width}",
         "seed": job.seed,
         "offload_model": job.offload_model,
         "created_at": job.created_at,
@@ -484,6 +518,7 @@ def healthz() -> dict[str, Any]:
         "results_root": str(SETTINGS.results_root),
         "outputs_root": str(SETTINGS.outputs_root),
         "animate_ckpt_dir": str(SETTINGS.animate_ckpt_dir),
+        "default_resolution": SETTINGS.default_resolution,
     }
 
 
